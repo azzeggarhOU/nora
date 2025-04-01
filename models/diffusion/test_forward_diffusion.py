@@ -58,7 +58,7 @@ def plot_images(images, steps, figure_size=(12, 9), save_path=None):
     plt.show()
 
 def main():
-    image_path = "test.jpg"  # Path to your test image
+    image_path = "test.jpeg"  # Path to your test image
     time_steps_viz = [0, 200, 400, 600, 800, 1000]  # Time steps to visualize
 
     # Load the test image

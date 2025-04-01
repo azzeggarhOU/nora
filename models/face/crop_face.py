@@ -1,12 +1,15 @@
 import cv2
 import numpy as np
+import torch
+import onnx
+import onnxruntime as ort
 
-# Load YuNet model
+# Load YuNet face detector (OpenCV)
 model_path = "./face_detection_yunet_2023mar.onnx"
-face_detector = cv2.FaceDetectorYN_create(model_path, "", (640, 640))
+face_detector = cv2.FaceDetectorYN_create(model_path, "", (320, 320))
 
-# Tune detection thresholds
-face_detector.setScoreThreshold(0.5)
+# Configure detection thresholds
+face_detector.setScoreThreshold(0.7)  # Higher = fewer false positives
 face_detector.setNMSThreshold(0.3)
 face_detector.setTopK(5000)
 
@@ -17,35 +20,30 @@ def crop_face(image_path, output_face_path="cropped_face.jpg", output_bg_path="b
         print(f"Error: Could not load image '{image_path}'. Check the file path.")
         return
     
-    img = cv2.resize(img, (640, 640))  # Resize for better detection
-    face_detector.setInputSize((640, 640))
+    h, w = img.shape[:2]
+    scale = 640 / max(h, w)  # Preserve aspect ratio
+    img_resized = cv2.resize(img, (int(w * scale), int(h * scale)))
     
-    faces = face_detector.detect(img)
-    print("Raw detection output:", faces)  # Debugging
+    face_detector.setInputSize((img_resized.shape[1], img_resized.shape[0]))
+    faces = face_detector.detect(img_resized)
 
     if faces is not None and faces[1] is not None:
-        # Extract face bounding box (x, y, w, h)
         x, y, w, h = map(int, faces[1][0][:4])
         
-        # Create a square bounding box around the face
+        # Ensure square bounding box
         max_side = max(w, h)
         padding_x = (max_side - w) // 2
         padding_y = (max_side - h) // 2
+        x, y = max(x - padding_x, 0), max(y - padding_y, 0)
 
-        # Adjust x, y for the padding (ensure the face stays centered)
-        x = max(x - padding_x, 0)
-        y = max(y - padding_y, 0)
+        face_crop = img_resized[y:y + max_side, x:x + max_side]
 
-        # Ensure the square crop does not exceed image boundaries
-        face_crop = img[y:y + max_side, x:x + max_side]
+        # Blur face instead of blacking it out
+        background = img_resized.copy()
+        face_region = background[y:y + max_side, x:x + max_side]
+        blurred_face = cv2.GaussianBlur(face_region, (99, 99), 30)
+        background[y:y + max_side, x:x + max_side] = blurred_face
 
-        # Create the background image (blackout the face part)
-        background = img.copy()
-
-        # Blackout the face region in the background image
-        background[y:y + max_side, x:x + max_side] = 0  # Set the face area to black
-
-        # Save the cropped face and background
         cv2.imwrite(output_face_path, face_crop)
         cv2.imwrite(output_bg_path, background)
 
@@ -54,5 +52,18 @@ def crop_face(image_path, output_face_path="cropped_face.jpg", output_bg_path="b
     else:
         print("No face detected!")
 
+def export_face_detector_onnx(output_path="face_detector.onnx"):
+    dummy_input = torch.randn(1, 3, 320, 320)
+    torch.onnx.export(
+        face_detector,
+        dummy_input,
+        output_path,
+        opset_version=11,
+        input_names=["input"],
+        output_names=["output"],
+    )
+    print(f"Face detection model exported to {output_path}")
+
 # Example usage
 crop_face("test.jpeg")
+export_face_detector_onnx()

@@ -6,3 +6,8 @@ __pycache__/
 *.jpeg
 *.png
 /venv_nora/
+/vq-vae/data/
+/vq-vae/runs/
+/vq-vae/checkpoints/
+*_outputs
+/draft/w600k_r50.onnx

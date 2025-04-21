@@ -13,8 +13,8 @@ from tqdm import tqdm
 import gc
 
 # --- Configurations ---
-DATA_DIR = "./data/thumbnails64x64"
-BATCH_SIZE = 256 
+DATA_DIR = "./data/thumbnails128x128"
+BATCH_SIZE = 64 
 LATENT_DIM = 128
 NUM_CODEBOOK_ENTRIES = 512
 EMA_DECAY = 0.99
@@ -46,8 +46,8 @@ raw_transform = transforms.Compose([
 train_dataset = datasets.ImageFolder(root=DATA_DIR, transform=transform)
 val_dataset   = datasets.ImageFolder(root=DATA_DIR, transform=raw_transform)
 
-train_dataset.samples = train_dataset.samples[:15000]
-val_dataset.samples   = val_dataset.samples[:15000]
+train_dataset.samples = train_dataset.samples[:10000]
+val_dataset.samples   = val_dataset.samples[:10000]
 
 train_loader = DataLoader(
     train_dataset,
@@ -71,9 +71,12 @@ class Encoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.conv = nn.Sequential(
-            nn.Conv2d(3, 64, 4, 2, 1), nn.ReLU(inplace=True),
-            nn.Conv2d(64, 128, 4, 2, 1), nn.ReLU(inplace=True),
-            nn.Conv2d(128, LATENT_DIM, 3, 1, 1)
+            nn.Conv2d(3, 64, 4, 2, 1), # 128 → 64
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 128, 4, 2, 1), # 64 → 32
+            nn.ReLU(inplace=True),
+            nn.Conv2d(128, LATENT_DIM, 3, 1, 1) # 32 → 32 (just change channels)
+
         )
     def forward(self, x):
         return self.conv(x)
@@ -82,9 +85,13 @@ class Decoder(nn.Module):
     def __init__(self):
         super().__init__()
         self.deconv = nn.Sequential(
-            nn.ConvTranspose2d(LATENT_DIM, 128, 4, 2, 1), nn.ReLU(inplace=True),
-            nn.ConvTranspose2d(128, 64, 4, 2, 1), nn.ReLU(inplace=True),
-            nn.Conv2d(64, 3, 3, 1, 1), nn.Tanh()
+            nn.ConvTranspose2d(LATENT_DIM, 128, 4, 2, 1), # 32 → 64
+            nn.ReLU(inplace=True),
+            nn.ConvTranspose2d(128, 64, 4, 2, 1), # 64 → 128
+            nn.ReLU(inplace=True),
+            nn.Conv2d(64, 3, 3, 1, 1),
+            nn.Tanh()
+
         )
     def forward(self, z):
         return self.deconv(z)
@@ -143,7 +150,26 @@ scaler    = GradScaler(enabled=(device.type == "cuda"))
 
 # --- Training Loop ---
 if __name__ == "__main__":
-    for epoch in range(1, EPOCHS+1):
+    start_epoch = 1 
+
+    if os.listdir(CHECKPOINT_DIR):
+        checkpoints = sorted(os.listdir(CHECKPOINT_DIR))
+        latest_ckpt = os.path.join(CHECKPOINT_DIR, checkpoints[-1])
+
+        if latest_ckpt:
+            print(f"Loading checkpoint {latest_ckpt}...")
+            checkpoint_data = torch.load(latest_ckpt, map_location=device)
+            encoder.load_state_dict(checkpoint_data['encoder'])
+            decoder.load_state_dict(checkpoint_data['decoder'])
+            quantizer.load_state_dict(checkpoint_data['quantizer'])
+            optimizer.load_state_dict(checkpoint_data['optimizer'])
+            # You can also parse epoch number from filename if you want
+            start_epoch = int(latest_ckpt.split('_')[-1].replace('.pth', '')) + 1
+        else:
+            start_epoch = 1
+
+
+    for epoch in range(start_epoch, EPOCHS+1):
         encoder.train(); decoder.train(); quantizer.train()
         total_loss = 0.0
         for imgs, _ in tqdm(train_loader, desc=f"Epoch {epoch}"):

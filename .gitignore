@@ -10,4 +10,4 @@ __pycache__/
 /vq-vae/runs/
 /vq-vae/checkpoints/
 *_outputs
-/draft/w600k_r50.onnx
+/draft/*.onnx

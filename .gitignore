@@ -9,5 +9,6 @@ __pycache__/
 /vq-vae/data/
 /vq-vae/runs/
 /vq-vae/checkpoints/
+/vq-vae/backups/
 *_outputs
 /draft/*.onnx

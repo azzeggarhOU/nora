@@ -5,10 +5,13 @@ __pycache__/
 *.jpg
 *.jpeg
 *.png
+*.pth
+*.npz
+events.*
 /venv_nora/
 /vq-vae/data/
 /vq-vae/runs/
 /vq-vae/checkpoints/
 /vq-vae/backups/
 *_outputs
-/draft/*.onnx
+*.onnx
